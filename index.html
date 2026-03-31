@@ -81,32 +81,27 @@ box-shadow:0 10px 25px rgba(0,0,0,0.3);margin-bottom:25px;}
 <script>
 
 // ================= CONFIG =================
-<script>
+const ESP_IP = "http://192.168.1.200"; // your ESP IP
 
-// ================= CONFIG =================
-const ESP_IP = "http://192.168.1.200"; // ✅ your ESP IP
-
-const GITHUB_ATT = "https://raw.githubusercontent.com/adarsha8984/attendance/main/data/attendance.json";
-const GITHUB_USERS = "https://raw.githubusercontent.com/adarsha8984/attendance/main/data/users.json";
+const GITHUB_ATT = "https://raw.githubusercontent.com/loinux/Fingerprint-Attendance-/main/data/attendance.json";
+const GITHUB_USERS = "https://raw.githubusercontent.com/loinux/Fingerprint-Attendance-/main/data/users.json";
 
 // ================= LOAD DATA =================
 async function loadAttendance(){
   try{
-    let attRes = await fetch(GITHUB_ATT + "?t=" + new Date().getTime());
+    let attRes = await fetch(GITHUB_ATT + "?t=" + Date.now());
     let attendance = await attRes.json();
 
-    let userRes = await fetch(GITHUB_USERS + "?t=" + new Date().getTime());
+    let userRes = await fetch(GITHUB_USERS + "?t=" + Date.now());
     let users = await userRes.json();
 
-    let table = document.getElementById("attendanceTable").getElementsByTagName('tbody')[0];
+    let table = document.querySelector("#attendanceTable tbody");
     table.innerHTML = "";
 
-    attendance.forEach(e => {
-      let name = "Unknown";
-      let user = users.find(u => u.id == e.id);
-      if(user) name = user.name;
+    attendance.reverse().forEach(e => {
 
-      let row = table.insertRow();
+      let user = users.find(u => u.id == e.id);
+      let name = user ? user.name : "Unknown";
 
       let t = new Date(e.time);
       let status = "On Time";
@@ -115,14 +110,17 @@ async function loadAttendance(){
         status = "Late";
       }
 
-      row.insertCell(0).innerText = e.id;
-      row.insertCell(1).innerText = name;
-      row.insertCell(2).innerText = t.toLocaleString();
-      row.insertCell(3).innerText = status;
+      table.innerHTML += `
+      <tr>
+        <td>${e.id}</td>
+        <td>${name}</td>
+        <td>${t.toLocaleString()}</td>
+        <td>${status}</td>
+      </tr>`;
     });
 
   }catch(err){
-    console.log("Load error:", err);
+    console.log("❌ Load error:", err);
   }
 }
 
@@ -136,8 +134,8 @@ function enrollFinger(){
   }
 
   fetch(`${ESP_IP}/enroll?id=${id}`)
-  .then(() => alert("Place finger twice for ID " + id))
-  .catch(() => alert("ESP not reachable"));
+  .then(()=>alert("Place finger twice"))
+  .catch(()=>alert("ESP not reachable"));
 }
 
 // ================= SAVE USER =================
@@ -146,82 +144,71 @@ function saveUser(){
   let name = document.getElementById("name").value;
 
   if(!id || !name){
-    alert("Enter ID and Name");
+    alert("Enter ID & Name");
     return;
   }
 
   fetch(`${ESP_IP}/adduser?id=${id}&name=${name}`)
-  .then(res => res.text())
-  .then(msg => {
-    alert(msg || "User Saved");
-  })
-  .catch(err => {
-    alert("❌ ESP not reachable / CORS blocked");
-    console.log(err);
-  });
+  .then(()=>alert("User Saved"))
+  .catch(()=>alert("ESP not reachable / CORS issue"));
 }
 
 // ================= SCAN =================
 function scanFinger(){
   fetch(`${ESP_IP}/scan`)
-  .then(res => res.text())
-  .then(id => {
-
-    if(parseInt(id) > 0){
-      alert("Scan Success ID: " + id);
+  .then(res=>res.text())
+  .then(id=>{
+    if(parseInt(id)>0){
+      alert("ID: "+id);
       loadAttendance();
-    } else {
-      alert("Finger not recognized");
+    }else{
+      alert("Not recognized");
     }
-
   })
-  .catch(() => alert("ESP not reachable"));
+  .catch(()=>alert("ESP not reachable"));
 }
 
-// ================= CSV DOWNLOAD =================
-function downloadCSV() {
-  let rows = [["ID","Name","Time","Status"]];
-  let table = document.getElementById("attendanceTable");
+// ================= CSV =================
+function downloadCSV(){
+  let rows=[["ID","Name","Time","Status"]];
+  let table=document.getElementById("attendanceTable");
 
-  for (let i = 1; i < table.rows.length; i++) {
-    let cols = [];
-    for (let j = 0; j < table.rows[i].cells.length; j++) {
+  for(let i=1;i<table.rows.length;i++){
+    let cols=[];
+    for(let j=0;j<table.rows[i].cells.length;j++){
       cols.push(table.rows[i].cells[j].innerText);
     }
     rows.push(cols);
   }
 
-  let csv = rows.map(r => r.join(",")).join("\n");
-  let blob = new Blob([csv], { type: "text/csv" });
+  let csv=rows.map(r=>r.join(",")).join("\n");
+  let blob=new Blob([csv]);
 
-  let link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = "attendance.csv";
-  link.click();
+  let a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="attendance.csv";
+  a.click();
 }
 
-// ================= MONTHLY REPORT =================
+// ================= MONTHLY =================
 async function monthlyReport(){
-  let data = await fetch(GITHUB_ATT).then(res => res.json());
-  let users = await fetch(GITHUB_USERS).then(res => res.json());
+  let data=await fetch(GITHUB_ATT).then(r=>r.json());
+  let users=await fetch(GITHUB_USERS).then(r=>r.json());
 
-  let now = new Date();
-  let month = now.getMonth();
-  let year = now.getFullYear();
+  let now=new Date();
 
-  let rows = [["ID","Name","Date","Time","Status"]];
+  let rows=[["ID","Name","Date","Time","Status"]];
 
-  data.forEach(e => {
-    let d = new Date(e.time);
+  data.forEach(e=>{
+    let d=new Date(e.time);
 
-    if(d.getMonth()==month && d.getFullYear()==year){
+    if(d.getMonth()==now.getMonth() && d.getFullYear()==now.getFullYear()){
+      let user=users.find(u=>u.id==e.id);
+      let name=user?user.name:"Unknown";
 
-      let user = users.find(u => u.id == e.id);
-      let name = user ? user.name : "Unknown";
-
-      let status = "On Time";
-      if(d.getHours() > 9 || (d.getHours()==9 && d.getMinutes()>30)){
-        status = "Late";
+      let status="On Time";
+      if(d.getHours()>9 || (d.getHours()==9 && d.getMinutes()>30)){
+        status="Late";
       }
 
       rows.push([
@@ -234,17 +221,17 @@ async function monthlyReport(){
     }
   });
 
-  let csv = rows.map(r => r.join(",")).join("\n");
-  let blob = new Blob([csv], { type: "text/csv" });
+  let csv=rows.map(r=>r.join(",")).join("\n");
+  let blob=new Blob([csv]);
 
-  let link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = "Monthly_Report.csv";
-  link.click();
+  let a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="Monthly_Report.csv";
+  a.click();
 }
 
-// ================= AUTO REFRESH =================
-setInterval(loadAttendance, 5000);
+// ================= AUTO =================
+setInterval(loadAttendance,5000);
 loadAttendance();
 
 </script>
